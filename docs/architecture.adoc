@@ -1,0 +1,398 @@
+= Lottery GA — Architecture
+:toc:
+:sectnums:
+:sectnumlevels: 4
+:icons: font
+:plantuml: http://www.plantuml.com/plantuml
+
+== Purpose
+
+A Python application that uses genetic algorithms (GAs) to explore frequency-based
+prediction of Powerball numbers from historical draw data.  The data is fetched
+from a New York State open-data CSV endpoint and stored in a local SQLite database.
+
+[NOTE]
+====
+Powerball draws are independent random events.  Past frequency data has zero
+predictive power for future draws.  This project is an educational exercise in
+genetic algorithm design, not a serious prediction tool.
+====
+
+== Genetic Algorithm Primer
+
+A genetic algorithm is a search heuristic inspired by natural selection.  Instead
+of solving a problem directly, it evolves candidate solutions over successive
+generations, keeping the best traits and discarding the worst.
+
+=== Core Concepts
+
+[cols="2,3"]
+|===
+|Concept |Description
+|Population |A set of candidate solutions at a given point in time.
+|Chromosome |A single candidate solution, composed of genes.
+|Gene      |The smallest building block of a solution (one parameter).
+|Allele    |The specific value carried by a gene.
+|Fitness   |A score measuring how good a solution is.
+|Selection |Choosing parents proportionally to their fitness.
+|Crossover |Combining two parent chromosomes to produce offspring.
+|Mutation  |Randomly perturbing a gene to maintain diversity.
+|Generation|One complete iteration of the evolutionary loop.
+|Convergence|The population settles on similar high-fitness solutions.
+|===
+
+=== The Evolutionary Loop
+
+. **Initialisation** — Generate a random population of N chromosomes.
+. **Evaluation** — Score every chromosome with the fitness function.
+. **Selection** — Pick two parents based on their fitness (higher = better chance).
+. **Crossover** — With probability `p_c`, splice parents to create offspring.
+. **Mutation** — With probability `p_m`, randomly alter each offspring gene.
+. **Replacement** — Merge offspring into the population, keeping population size.
+. **Termination** — If max generations reached or convergence detected, stop.
+Otherwise, return to step 2.
+
+=== Domain Mapping: GA → Lottery
+
+[cols="2,3,2"]
+|===
+|GA Concept |Lottery Domain |Implementation
+|Population  |Set of ticket candidates |`List[Ticket]`
+|Chromosome  |One ticket (5 white + 1 Powerball) |`Ticket` class
+|Gene        |A single ball number |`Ball` class
+|Allele      |The integer value (1-69 white, 1-26 PB) |`Ball.value()`
+|Fitness     |How well a ticket matches historical frequency |`FrequencyFitness` function
+|Selection   |Pick promising ticket numbers |`TournamentSelection`
+|Crossover   |Swap balls between two tickets |`Ticket.crossover()`
+|Mutation    |Randomly change a ball value |`Ball.mutate()`
+|Convergence |Population clusters around popular numbers |Stagnation check
+|===
+
+== System Context
+
+The system operates as a local command-line tool with three external dependencies:
+
+[plantuml,"Context diagram","png"]
+....
+@startuml
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+
+LAYOUT_WITH_LEGEND()
+
+Person(user, "User", "Runs the GA to explore lottery prediction")
+
+System_Boundary(lottery, "Lottery GA") {
+    Container(cli, "CLI Entry Point", "Python", "Orchestrates fetch, evolve, display")
+    Container(ga, "GA Engine", "Python", "Population evolution loop")
+    Container(data, "Data Layer", "Python + SQLite", "Fetch, cache, persist")
+}
+
+System_Ext(csv_url, "NY Open Data CSV", "https://data.ny.gov/api/views/d6yy-54nr/rows.csv")
+System_Ext(filesystem, "Local Filesystem", "config.toml, logs, cache, fixtures")
+
+Rel(user, cli, "runs")
+Rel(cli, ga, "evolves")
+Rel(cli, data, "loads / persists")
+Rel(data, csv_url, "fetches CSV")
+Rel(data, filesystem, "reads / writes")
+
+SHOW_LEGEND()
+@enduml
+....
+
+== GA Process Flow
+
+The core evolutionary loop executed by the GA Engine:
+
+[plantuml,"GA lifecycle — activity diagram","png"]
+....
+@startuml
+|Initialisation|
+start
+:Generate random population;
+:Evaluate initial fitness;
+
+|Evolutionary Loop|
+while (generation < max_generations?) is (yes)
+  repeat
+    :Select two parents (tournament);
+    :Crossover with probability p_c → offspring;
+    :Mutate each gene with probability p_m;
+    :Add offspring to new population;
+  repeat while (new population < pop_size)
+
+  :Replace old population with new;
+  :Evaluate fitness of new population;
+  :Record best-so-far;
+  :generation++ ;
+endwhile (no)
+
+|Output|
+:Return best candidate from history;
+stop
+@enduml
+....
+
+=== Step-by-step Walkthrough
+
+. **Initialisation** — Create `pop_size` random `Ticket` objects.  Each `Ticket`
+  contains 5 white-ball `Ball` genes (1-69) and 1 Powerball `Ball` gene (1-26).
+  Random alleles are drawn uniformly from the valid range.
+. **Fitness evaluation** — For each ticket, look up the historical frequency of
+  each of its six numbers in the materialised `frequency` table.  The sum of
+  all frequencies is that ticket's fitness score.  (Future: score by prize tier
+  instead.)
+. **Selection** — Run a tournament: pick `k` random tickets from the population,
+  return the one with the highest fitness.  Repeat to get a second parent.
+. **Crossover** — With probability `crossover_prob`, splice the two parent
+  tickets to produce an offspring.  Crossover is bounded: the resulting numbers
+  must remain within `[1, 69]` for white balls and `[1, 26]` for the Powerball.
+  If a generated value would be out of range, retry up to `MAX_TRIES` times,
+  then fall back to a random valid value.
+. **Mutation** — For each `Ball` gene in the offspring, flip each bit in its
+  binary representation with probability `mut_rate`.
+. **Replacement** — When the offspring pool reaches `pop_size`, replace the
+  entire old population with the new one (generational replacement).
+. **Termination** — After `max_generations` iterations, return the ticket with
+  the highest fitness ever seen (elitism via best-so-far tracking).
+
+== Program Structure
+
+The system is decomposed into five modules coordinated by a CLI front-end or
+Jupyter notebook.
+
+[plantuml,"Package and component diagram","png"]
+....
+@startuml
+skinparam packageStyle rectangle
+
+package "lottery" {
+  [config.py] as CONFIG
+  [data.py] as DATA
+  [db.py] as DB
+  [ga.py] as GA
+  [ui.py] as UI
+  [__main__.py] as MAIN
+}
+
+package "external" {
+  [NY Open Data CSV] as CSV
+  [SQLite] as SQLITE
+  [Filesystem] as FS
+}
+
+CONFIG --> GA : feeds parameters
+CONFIG --> DATA : feeds paths
+CONFIG --> DB : feeds db_path
+CONFIG --> UI : feeds preferences
+
+DATA --> CSV : fetch CSV
+DATA --> DB : persist draws
+DB --> GA : provides frequency
+GA --> UI : outputs results
+
+@enduml
+....
+
+=== Module Responsibilities
+
+[cols="3,2,5"]
+|===
+|Module |Key Class(es) |Responsibility
+|`config.py` |`Config` |Load TOML config, resolve paths, provide defaults.
+|`data.py` |`DataFetcher` |Fetch CSV from URL, cache with TTL, parse into draws.
+|`db.py` |`Database` |Schema migration, insert draws, materialise frequency.
+|`ga.py` |`Ball`, `Ticket`, `Population`, `GAEngine` |Core GA: genes, chromosomes, selection, crossover, mutation, evolution loop.
+|`ui.py` |`Display` |Console output, progress bars, CSV/JSON export.
+|`__main__.py` |— |CLI entry point: parse args, wire modules, run pipeline.
+|===
+
+== Data Flow
+
+The lifecycle of a single run proceeds through five stages:
+
+[plantuml,"Data flow — sequence diagram","png"]
+....
+@startuml
+participant User
+participant "__main__" as CLI
+participant Config as C
+participant DataFetcher as DF
+participant Database as DB
+participant GAEngine as GA
+participant Display as UI
+
+User -> CLI : python -m lottery
+CLI -> C : Config()
+C --> CLI : config object
+CLI -> DF : fetch(force=False)
+DF -> DB : init_schema()
+DB --> DF : schema ready
+DF -> "CSV URL" : GET /rows.csv
+"CSV URL" --> DF : CSV data
+DF -> DB : insert_draws()
+DB --> DF : rows written
+DF -> DB : update_frequency()
+DB --> DF : frequency table ready
+DF --> CLI : status
+CLI -> GA : evolve()
+GA -> DB : get_frequency_table()
+DB --> GA : frequencies
+GA -> GA : run evolution loop
+GA --> CLI : best ticket
+CLI -> UI : show_results(best)
+CLI -> UI : export_json(best)
+UI --> User : console output + file
+@enduml
+....
+
+== Database Schema
+
+The database stores raw draw records and a materialised frequency table.
+
+[plantuml,"Entity-relationship diagram","png"]
+....
+@startuml
+
+entity "names" as NAMES {
+  + id: INTEGER [PK]
+  --
+  draw_date: DATE [NN]
+  white_1: INTEGER [NN]
+  white_2: INTEGER [NN]
+  white_3: INTEGER [NN]
+  white_4: INTEGER [NN]
+  white_5: INTEGER [NN]
+  pb: INTEGER [NN]
+  multi: INTEGER
+}
+
+entity "frequency" as FREQ {
+  + number: INTEGER [PK]
+  --
+  white: INTEGER [DEFAULT 0]
+  pb: INTEGER [DEFAULT 0]
+}
+
+NAMES ||--o{ FREQ : "derives"
+@enduml
+....
+
+[source, sql]
+----
+CREATE TABLE IF NOT EXISTS names (
+    id        INTEGER PRIMARY KEY,
+    draw_date DATE    NOT NULL,
+    white_1   INTEGER NOT NULL,
+    white_2   INTEGER NOT NULL,
+    white_3   INTEGER NOT NULL,
+    white_4   INTEGER NOT NULL,
+    white_5   INTEGER NOT NULL,
+    pb        INTEGER NOT NULL,  -- Powerball
+    multi     INTEGER            -- Power Play multiplier
+);
+
+CREATE TABLE IF NOT EXISTS frequency (
+    number  INTEGER PRIMARY KEY,
+    white   INTEGER DEFAULT 0,
+    pb      INTEGER DEFAULT 0
+);
+----
+
+The `frequency` table is a materialised view refreshed after every data load.
+It is computed by counting each number's appearances across the `names` table.
+
+== Constraints & Assumptions
+
+=== Data Source
+
+|===
+|Constraint |Default
+|URL        |https://data.ny.gov/api/views/d6yy-54nr/rows.csv
+|Format     |CSV (pandas `read_csv`), columns matched by position
+|TTL        |6 hours (configurable)
+|Fallback   |Local fixture CSV at `fixtures/powerball_fixture.csv`
+|===
+
+=== Genetic Algorithm
+
+|===
+|Parameter       |Default |Notes
+|Population      |100     |May be tuned; larger = slower, more diverse
+|Generations     |1000    |Early termination if stagnation detected
+|Crossover prob  |0.8     |Fraction of offspring created via crossover (vs. clone)
+|Mutation rate   |0.05    |Per-gene, per-generation probability of bit flip
+|White gene bits |7       |Covers range 1–99 (actual range 1–69, clamped)
+|PB gene bits    |5       |Covers range 1–32 (actual range 1–26, clamped)
+|Selection       |Tournament (k=3) |Deterministic tournament size
+|Replacement     |Generational |Full replacement each generation
+|Elitism         |Best-so-far |Tracked externally
+|===
+
+=== Platform
+
+|===
+|Item   |Default
+|Runtime|Python 3.11+
+|DB     |SQLite 3 (stdlib)
+|OS     |Cross-platform (macOS, Linux, Windows)
+|===
+
+== Design Decisions
+
+=== TOML over environment variables
+
+A single file is easier to version-control, ship with repo defaults, and inspect
+than ad-hoc env vars.
+
+=== Materialised frequency table
+
+Recomputing frequency on every query is O(n) in table rows.  The materialised
+`frequency` table reduces each lookup to O(1) and is refreshed incrementally on
+data load.
+
+=== Populations instead of single-candidate evolution
+
+The notebook's original approach evolves one candidate at a time — this is
+sequential hill-climbing, not a GA.  Population-based search provides the
+genetic diversity that makes selection pressure meaningful.
+
+=== Console-first, notebook-compatible
+
+The UI module renders to stdout (progress bars, candidate tables, JSON) so it
+works in the terminal and in Jupyter notebooks alike.  A future GUI layer can
+be added behind the same `ui.py` interface.
+
+== Target File Structure
+
+[source, text]
+----
+lottery/
+├── pyproject.toml
+├── requirements.txt
+├── config.toml
+├── README.adoc
+├── ROADMAP.adoc
+├── docs/
+│   ├── architecture.adoc
+│   ├── design.adoc
+│   └── build.adoc
+├── fixtures/
+│   └── powerball_fixture.csv
+├── lottery/
+│   ├── __init__.py
+│   ├── __main__.py
+│   ├── config.py
+│   ├── data.py
+│   ├── db.py
+│   ├── ga.py
+│   └── ui.py
+└── tests/
+    ├── __init__.py
+    ├── conftest.py
+    ├── test_ga.py
+    ├── test_data.py
+    ├── test_db.py
+    └── test_config.py
+----

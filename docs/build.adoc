@@ -1,0 +1,173 @@
+= Lottery GA — Build
+
+:toc:
+:sectnums:
+:icon: font
+
+== Prerequisites
+
+[discrete]
+* Python 3.11 or later
+* `pip` or `uv` for package management
+* SQLite 3 (ships with Python)
+
+== Setup
+
+[discrete]
+=== 1. Clone
+
+....
+git clone https://github.com/<user>/lottery.git
+cd lottery
+....
+
+[discrete]
+=== 2. Create virtual environment
+
+....
+python -m venv .venv
+source .venv/bin/activate          # macOS / Linux
+.venv\Scripts\activate             # Windows
+....
+
+[discrete]
+=== 3. Install dependencies
+
+....
+pip install -r requirements.txt
+pip install -e ".[dev]"            # dev extras: ruff, pytest, mypy
+....
+
+[discrete]
+=== 4. Verify setup
+
+....
+python -c "from lottery.config import Config; print(Config())"
+pytest --co -q                      # discover tests only
+....
+
+== Running
+
+[discrete]
+=== Console mode
+
+....
+python -m lottery
+....
+
+[discrete]
+=== Notebook mode (original)
+
+Launch Jupyter:
+
+....
+jupyter notebook lottery_dev.ipynb
+....
+
+Or with JupyterLab:
+
+....
+jupyter lab lottery_dev.ipynb
+....
+
+== Configuration
+
+Copy the example `config.toml` to `.env.toml` (git-ignored) and adjust:
+
+....
+cp config.toml .env.toml
+
+<edit> .env.toml <edit>
+....
+
+All file paths resolve relative to the project root by default.
+
+== Testing
+
+....
+pytest
+pytest --cov=lottery               # with coverage report
+pytest --cov=lottery --cov-report=html  # HTML report in htmlcov/
+....
+
+== Linting & Type-checking
+
+....
+ruff check lottery/
+ruff format --check lottery/       # format check only
+ruff format lottery/               # actually format
+mypy lottery/                      # optional static types
+....
+
+== Project Structure (after refactor)
+
+....
+lottery/
+├── pyproject.toml
+├── requirements.txt
+├── config.toml            # default config
+├── .env.toml              # local overrides (git-ignored)
+├── ROADMAP.adoc
+├── README.adoc
+├── docs/
+│   ├── architecture.adoc
+│   ├── design.adoc
+│   └── build.adoc
+├── fixtures/
+│   └── powerball_fixture.csv
+├── lottery/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── data.py
+│   ├── db.py
+│   ├── ga.py
+│   └── ui.py
+└── tests/
+    ├── test_ga.py
+    ├── test_data.py
+    ├── test_db.py
+    └── conftest.py
+.....
+
+== CI / CD (future)
+
+[columns="1,2"]
+|===
+|Stage |Tool
+|Lint + test |GitHub Actions
+|Coverage |codecov
+|Release |semantic-release (optional)
+|===
+
+== Troubleshooting
+
+[discrete]
+=== Data fetch fails
+
+* Check network connectivity to the NY state CSV endpoint.
+* Set `cache_ttl_secs = 0` in `.env.toml` to force a fresh fetch.
+* Drop the fixture CSV into `fixtures/powerball_fixture.csv` for offline dev
+  testing.
+
+=== Database errors
+
+* Delete `lottery.sqlite` and re-run — `db.py` will recreate tables.
+* Or run `python -m lottery.db --init` to re-initialise.
+
+=== Jupyter kernel missing
+
+....
+python -m ipykernel install --user --name lottery --display-name "Python (lottery)"
+....
+
+
+
+[[changelog]]
+== Changelog
+
+[cols="1,1,2"]
+|===
+|Version |Date |Changes
+|0.1.0 |2023-01-24 |Initial notebook (lottery_dev.ipynb)
+|0.2.0 |TBD |Refactor → modular package, full GA, tests
+|===

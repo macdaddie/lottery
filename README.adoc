@@ -1,0 +1,83 @@
+= Lottery GA
+
+Genetic algorithms are always my favourite topic when studying AI and machine learning.
+Nothing beats the elegance of a well-implemented GA — population dynamics, selection
+pressure, fitness landscapes, convergence curves.
+
+So I suppose it only follows that I take a great deal of pleasure in the sheer
+*futility* of applying this beautiful technique to predicting the lottery.
+
+Because let us be clear: you cannot predict the future by "evolving" lottery numbers.
+Powerball draws are designed to be independent random events.  The balls in drum A
+have no memory of drum B.  Frequency analysis of past draws is statistically
+meaningless for future outcomes.  This project is a fun, honest, intentional example
+of that futility — an educational exercise for anyone who has ever stared at a
+spreadsheet of past Powerball results and wondered if there were patterns hiding
+in the noise.
+
+Spoiler: there are not.  But the journey through genetic algorithm design is worth
+it.  And the code will be *much* better for trying.
+
+== Project Structure
+
+This project started as a collection of exploratory Jupyter notebooks (`lottery_dev.ipynb`)
+where I experimented with the GA code and data.  Jupyter is a great sandbox for this —
+you can execute cells incrementally, inspect data interactively, and iterate fast.
+Once the experiments stabilise, the plan is to extract the working code into a
+traditional Python package (see <<roadmap>> for the target structure).
+
+== Requirements
+
+* Python 3.11+
+* pandas
+* SQLite 3 (ships with Python)
+
+See <<setup>> for full setup instructions and <<tests>> for running the test suite.
+
+== Quick Start
+
+....
+python lottery_dev.ipynb
+# or
+jupyter notebook lottery_dev.ipynb
+. ...
+
+== Configuration
+
+Set the `LOTTERY_DB` environment variable to override the default SQLite path:
+
+....
+export LOTTERY_DB=/where/ever/your/db/lives
+....
+
+Defaults to `./lottery.sqlite` in the project root.
+
+== Documentation
+
+[cols="1,2"]
+|===
+|Document|Link
+|ROADMAP|link:ROADMAP.adoc[prioritised task list]
+|Architecture|link:docs/architecture.adoc[system architecture and data flow]
+|Design|link:docs/design.adoc[classes, algorithms, and interfaces]
+|Build|link:docs/build.adoc[setup, run, test, and lint instructions]
+|===
+
+== Roadmap
+
+See link:ROADMAP.adoc[prioritised task list] for the full roadmap.  Highlights:
+
+* *P0 (Critical)* — Fix crossover infinite loop, database initialisation, config/portability, stale data source
+* *P1 (Important)* — Design a real GA (with actual populations), extract code from the notebook into a modular package, add tests, add dependency management
+* *P2 (Nice to Have)* — Prize-tier fitness scoring, visualisation layer, result export formats
+
+== Disclaimer
+
+Powerball draws are independent random events.  No amount of genetic algorithm
+engineering will produce numbers with better predictive power than picking them at
+random.  This project exists to explore genetic algorithms educationally, and to
+celebrate the beautiful irony of trying anyway.
+
+== License
+
+No license file is included yet.

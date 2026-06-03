@@ -1,0 +1,193 @@
+= Lottery GA Roadmap
+:toc: right
+:sectnums:
+:sectnumlevels: 3
+:icons: font
+
+This roadmap captures the recommended changes identified during review of the
+current exploratory notebook and supporting files.
+
+The project is intentionally experimental: the goal is to use lottery data as a
+playground for genetic algorithm design, not to claim that historical lottery
+draws can predict future outcomes.
+
+// TODO: P0 items are blocking issues that should be fixed before extending behaviour.
+== P0: Critical Blockers
+
+=== Guard `Ball.crossover()` Infinite Loop
+
+* [ ] Priority: Critical
+
+[WARNING]
+====
+`crossover()` has a `while (newvalue <= minvalue)` loop that can hang forever
+if crossover repeatedly produces out-of-bounds genes. The notebook output shows
+a `KeyboardInterrupt`, which is consistent with this failure mode.
+====
+
+Recommended change::
+Add a `MAX_TRIES` guard, for example `256` attempts, and fall back to generating
+a random valid gene once that guard is exhausted.
+
+=== Fix Database Initialization
+
+* [ ] Priority: Critical
+
+[WARNING]
+====
+The SQL setup uses `DROP TABLE` without `IF EXISTS`, and there is no repeatable
+database initialization or migration script.
+====
+
+Recommended change::
+Use `CREATE TABLE IF NOT EXISTS` for schema setup and add a small `init_db.py`
+helper or package command for repeatable local initialization.
+
+=== Replace Hard-Coded Paths with Configuration
+
+* [ ] Priority: Critical
+
+[WARNING]
+====
+`LOTTERY_DB` is required in some places, while other code paths still assume a
+local filesystem layout. Logging also assumes a macOS-specific `~/Library/Logs`
+location.
+====
+
+Recommended change::
+Introduce a project-level TOML or JSON config file and resolve database, cache,
+and log paths relative to the project root unless explicitly overridden.
+
+=== Refresh and Cache the Data Source
+
+* [ ] Priority: Critical
+
+[NOTE]
+====
+The latest row observed in the notebook is `09/30/2023`, and the external CSV
+endpoint has no cache or fallback strategy.
+====
+
+Recommended change::
+Add TTL-based caching and a local fixture CSV so development and testing can run
+without depending on the network.
+
+// TODO: P1 items make the project maintainable and closer to a real GA implementation.
+== P1: Important Improvements
+
+=== Design a Real Genetic Algorithm
+
+* [ ] Priority: Important
+
+Current behaviour evolves a single candidate per ball. That is sequential
+bit-flipping rather than a population-based genetic algorithm.
+
+Recommended change::
+Define population size, candidate representation, fitness scoring, selection
+method, crossover strategy, mutation behaviour, and replacement strategy.
+
+Candidate defaults::
+
+* Population size: `100`
+* Generations: `1000`
+* Selection: tournament selection, `k = 3`
+* Crossover: bounded uniform crossover
+* Mutation: per-gene mutation rate, initially `0.05`
+
+=== Extract Notebook Code into a Python Package
+
+* [ ] Priority: Important
+
+The notebook is useful for exploration, but GA logic, data fetching, database
+access, and display behaviour are currently interleaved.
+
+Recommended package layout::
+
+[source,text]
+----
+lottery/
+├── config.py  # configuration loading and path resolution
+├── data.py    # CSV/API fetcher and cache handling
+├── db.py      # SQLite schema and persistence helpers
+├── ga.py      # Ball, candidate, population, and GA engine
+└── ui.py      # console/notebook display helpers
+----
+
+=== Add a Test Suite
+
+* [ ] Priority: Important
+
+There are no tests for `Ball`, crossover, mutation, selection, database setup,
+or data ingestion.
+
+Recommended change::
+Add `pytest` tests under `tests/`, covering the core GA logic first, then the
+database and data-fetching layers. Target at least `85%` coverage for the future
+`lottery/` package.
+
+=== Complete Project Documentation
+
+* [ ] Priority: Important
+
+The original `README.md` was effectively empty, and the Java GA reference is not
+explained in the project documentation.
+
+Recommended change::
+Keep the AsciiDoc documentation set current as the code is extracted from the
+notebook into a package. Add a short note explaining the role of
+`ga_example_in_java.java` if it remains in the repository.
+
+=== Add Dependency and Tooling Files
+
+* [ ] Priority: Important
+
+The project currently has no dependency or tooling metadata.
+
+Recommended change::
+Add `requirements.txt` for runtime dependencies and `pyproject.toml` for tooling
+such as `ruff`, `pytest`, and optional type checking.
+
+// TODO: P2 items improve usefulness and presentation once the core project is stable.
+== P2: Nice-to-Have Enhancements
+
+=== Implement Prize-Tier Fitness Scoring
+
+* [ ] Priority: Optional
+
+Score candidate tickets against Powerball prize tiers and the Power Play
+multiplier rather than using only raw historical frequency.
+
+=== Add Visualizations
+
+* [ ] Priority: Optional
+
+Add charts for number frequency, convergence over generations, and population
+diversity.
+
+=== Add Result Export Formats
+
+* [ ] Priority: Optional
+
+Export candidate tickets and run metadata as CSV and JSON. A printable ticket
+format can be added later if useful.
+
+[[documentation-links]]
+== Documentation Links
+
+Use these documents alongside this roadmap:
+
+* link:README.adoc[project README]
+* link:docs/architecture.adoc[system architecture and data flow]
+* link:docs/design.adoc[classes, algorithms, and interfaces]
+* link:docs/build.adoc[setup, run, test, and lint instructions]
+
+== Priority Legend
+
+Critical::
+Blocking correctness, execution, or repeatable development.
+
+Important::
+Required to make the project maintainable and structurally sound.
+
+Optional::
+Useful once the core implementation is stable.

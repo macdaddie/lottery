@@ -1,0 +1,11 @@
+.DS_Store
+.env
+.env.*
+.venv/
+__pycache__/
+*.pyc
+*.sqlite
+*.db
+.ipynb_checkpoints/
+htmlcov/
+.pytest_cache/
