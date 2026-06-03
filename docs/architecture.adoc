@@ -3,7 +3,6 @@
 :sectnums:
 :sectnumlevels: 4
 :icons: font
-:plantuml: http://www.plantuml.com/plantuml
 
 == Purpose
 
@@ -72,67 +71,45 @@ Otherwise, return to step 2.
 
 The system operates as a local command-line tool with three external dependencies:
 
-[plantuml,"Context diagram","png"]
-....
-@startuml
-!include <C4/C4_Context>
-!include <C4/C4_Container>
+[source,mermaid]
+----
+flowchart LR
+    user[User] --> cli[CLI Entry Point\nOrchestrates fetch, evolve, display]
+    cli --> ga[GA Engine\nPopulation evolution loop]
+    cli --> data[Data Layer\nFetch, cache, persist]
+    data --> csv[(NY Open Data CSV)]
+    data --> fs[(Local Filesystem)]
+    csv_url[https://data.ny.gov/api/views/d6yy-54nr/rows.csv]
+    fs_paths[config.toml, logs, cache, fixtures]
 
-LAYOUT_WITH_LEGEND()
-
-Person(user, "User", "Runs the GA to explore lottery prediction")
-
-System_Boundary(lottery, "Lottery GA") {
-    Container(cli, "CLI Entry Point", "Python", "Orchestrates fetch, evolve, display")
-    Container(ga, "GA Engine", "Python", "Population evolution loop")
-    Container(data, "Data Layer", "Python + SQLite", "Fetch, cache, persist")
-}
-
-System_Ext(csv_url, "NY Open Data CSV", "https://data.ny.gov/api/views/d6yy-54nr/rows.csv")
-System_Ext(filesystem, "Local Filesystem", "config.toml, logs, cache, fixtures")
-
-Rel(user, cli, "runs")
-Rel(cli, ga, "evolves")
-Rel(cli, data, "loads / persists")
-Rel(data, csv_url, "fetches CSV")
-Rel(data, filesystem, "reads / writes")
-
-SHOW_LEGEND()
-@enduml
-....
+    csv_url -.-> csv
+    fs_paths -.-> fs
+----
 
 == GA Process Flow
 
 The core evolutionary loop executed by the GA Engine:
 
-[plantuml,"GA lifecycle — activity diagram","png"]
-....
-@startuml
-|Initialisation|
-start
-:Generate random population;
-:Evaluate initial fitness;
-
-|Evolutionary Loop|
-while (generation < max_generations?) is (yes)
-  repeat
-    :Select two parents (tournament);
-    :Crossover with probability p_c → offspring;
-    :Mutate each gene with probability p_m;
-    :Add offspring to new population;
-  repeat while (new population < pop_size)
-
-  :Replace old population with new;
-  :Evaluate fitness of new population;
-  :Record best-so-far;
-  :generation++ ;
-endwhile (no)
-
-|Output|
-:Return best candidate from history;
-stop
-@enduml
-....
+[source,mermaid]
+----
+flowchart TD
+    start([Start]) --> init[Generate random population]
+    init --> eval[Evaluate initial fitness]
+    eval --> loop{generation < max_generations?}
+    loop -- yes --> select[Select two parents\n(tournament)]
+    select --> cross[Crossover with probability p_c\noffspring]
+    cross --> mutate[Mutate each gene\nwith probability p_m]
+    mutate --> grow[Add offspring to new population]
+    grow --> full{new population < pop_size?}
+    full -- yes --> select
+    full -- no --> replace[Replace old population with new]
+    replace --> reevaluate[Evaluate fitness of new population]
+    reevaluate --> best[Record best-so-far]
+    best --> inc[generation++]
+    inc --> loop
+    loop -- no --> output[Return best candidate from history]
+    output --> end([End])
+----
 
 === Step-by-step Walkthrough
 
@@ -162,38 +139,33 @@ stop
 The system is decomposed into five modules coordinated by a CLI front-end or
 Jupyter notebook.
 
-[plantuml,"Package and component diagram","png"]
-....
-@startuml
-skinparam packageStyle rectangle
+[source,mermaid]
+----
+flowchart LR
+    subgraph lottery[lottery]
+        config[config.py]
+        data[data.py]
+        db[db.py]
+        ga[ga.py]
+        ui[ui.py]
+        main[__main__.py]
+    end
 
-package "lottery" {
-  [config.py] as CONFIG
-  [data.py] as DATA
-  [db.py] as DB
-  [ga.py] as GA
-  [ui.py] as UI
-  [__main__.py] as MAIN
-}
+    subgraph external[external]
+        csv[NY Open Data CSV]
+        sqlite[SQLite]
+        fs[Filesystem]
+    end
 
-package "external" {
-  [NY Open Data CSV] as CSV
-  [SQLite] as SQLITE
-  [Filesystem] as FS
-}
-
-CONFIG --> GA : feeds parameters
-CONFIG --> DATA : feeds paths
-CONFIG --> DB : feeds db_path
-CONFIG --> UI : feeds preferences
-
-DATA --> CSV : fetch CSV
-DATA --> DB : persist draws
-DB --> GA : provides frequency
-GA --> UI : outputs results
-
-@enduml
-....
+    config -->|feeds parameters| ga
+    config -->|feeds paths| data
+    config -->|feeds db_path| db
+    config -->|feeds preferences| ui
+    data -->|fetch CSV| csv
+    data -->|persist draws| db
+    db -->|provides frequency| ga
+    ga -->|outputs results| ui
+----
 
 === Module Responsibilities
 
@@ -212,72 +184,66 @@ GA --> UI : outputs results
 
 The lifecycle of a single run proceeds through five stages:
 
-[plantuml,"Data flow — sequence diagram","png"]
-....
-@startuml
-participant User
-participant "__main__" as CLI
-participant Config as C
-participant DataFetcher as DF
-participant Database as DB
-participant GAEngine as GA
-participant Display as UI
+[source,mermaid]
+----
+sequenceDiagram
+    actor User
+    participant CLI as __main__
+    participant C as Config
+    participant DF as DataFetcher
+    participant DB as Database
+    participant GA as GAEngine
+    participant UI as Display
 
-User -> CLI : python -m lottery
-CLI -> C : Config()
-C --> CLI : config object
-CLI -> DF : fetch(force=False)
-DF -> DB : init_schema()
-DB --> DF : schema ready
-DF -> "CSV URL" : GET /rows.csv
-"CSV URL" --> DF : CSV data
-DF -> DB : insert_draws()
-DB --> DF : rows written
-DF -> DB : update_frequency()
-DB --> DF : frequency table ready
-DF --> CLI : status
-CLI -> GA : evolve()
-GA -> DB : get_frequency_table()
-DB --> GA : frequencies
-GA -> GA : run evolution loop
-GA --> CLI : best ticket
-CLI -> UI : show_results(best)
-CLI -> UI : export_json(best)
-UI --> User : console output + file
-@enduml
-....
+    User->>CLI: python -m lottery
+    CLI->>C: Config()
+    C-->>CLI: config object
+    CLI->>DF: fetch(force=False)
+    DF->>DB: init_schema()
+    DB-->>DF: schema ready
+    DF->>DF: GET /rows.csv
+    DF->>DB: insert_draws()
+    DB-->>DF: rows written
+    DF->>DB: update_frequency()
+    DB-->>DF: frequency table ready
+    DF-->>CLI: status
+    CLI->>GA: evolve()
+    GA->>DB: get_frequency_table()
+    DB-->>GA: frequencies
+    GA->>GA: run evolution loop
+    GA-->>CLI: best ticket
+    CLI->>UI: show_results(best)
+    CLI->>UI: export_json(best)
+    UI-->>User: console output + file
+----
 
 == Database Schema
 
 The database stores raw draw records and a materialised frequency table.
 
-[plantuml,"Entity-relationship diagram","png"]
-....
-@startuml
+[source,mermaid]
+----
+erDiagram
+    NAMES {
+        INTEGER id PK
+        DATE draw_date
+        INTEGER white_1
+        INTEGER white_2
+        INTEGER white_3
+        INTEGER white_4
+        INTEGER white_5
+        INTEGER pb
+        INTEGER multi
+    }
 
-entity "names" as NAMES {
-  + id: INTEGER [PK]
-  --
-  draw_date: DATE [NN]
-  white_1: INTEGER [NN]
-  white_2: INTEGER [NN]
-  white_3: INTEGER [NN]
-  white_4: INTEGER [NN]
-  white_5: INTEGER [NN]
-  pb: INTEGER [NN]
-  multi: INTEGER
-}
+    FREQUENCY {
+        INTEGER number PK
+        INTEGER white
+        INTEGER pb
+    }
 
-entity "frequency" as FREQ {
-  + number: INTEGER [PK]
-  --
-  white: INTEGER [DEFAULT 0]
-  pb: INTEGER [DEFAULT 0]
-}
-
-NAMES ||--o{ FREQ : "derives"
-@enduml
-....
+    NAMES ||--o{ FREQUENCY : derives
+----
 
 [source, sql]
 ----
