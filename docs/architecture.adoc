@@ -96,7 +96,7 @@ flowchart TD
     start([Start]) --> init[Generate random population]
     init --> eval[Evaluate initial fitness]
     eval --> loop{generation < max_generations?}
-    loop -- yes --> select[Select two parents<br/>(tournament)]
+    loop -- yes --> select["Select two parents<br/>(tournament)"]
     select --> cross["Crossover with probability p_c<br/>offspring"]
     cross --> mutate["Mutate each gene<br/>with probability p_m"]
     mutate --> grow[Add offspring to new population]
