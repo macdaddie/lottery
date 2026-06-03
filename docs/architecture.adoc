@@ -108,7 +108,7 @@ flowchart TD
     best --> inc[generation++]
     inc --> loop
     loop -- no --> output[Return best candidate from history]
-    output --> end([End])
+    output --> finish([End])
 ----
 
 === Step-by-step Walkthrough
