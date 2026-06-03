@@ -74,9 +74,9 @@ The system operates as a local command-line tool with three external dependencie
 [source,mermaid]
 ----
 flowchart LR
-    user[User] --> cli[CLI Entry Point\nOrchestrates fetch, evolve, display]
-    cli --> ga[GA Engine\nPopulation evolution loop]
-    cli --> data[Data Layer\nFetch, cache, persist]
+    user[User] --> cli["CLI Entry Point<br/>Orchestrates fetch, evolve, display"]
+    cli --> ga["GA Engine<br/>Population evolution loop"]
+    cli --> data["Data Layer<br/>Fetch, cache, persist"]
     data --> csv[(NY Open Data CSV)]
     data --> fs[(Local Filesystem)]
     csv_url[https://data.ny.gov/api/views/d6yy-54nr/rows.csv]
@@ -96,9 +96,9 @@ flowchart TD
     start([Start]) --> init[Generate random population]
     init --> eval[Evaluate initial fitness]
     eval --> loop{generation < max_generations?}
-    loop -- yes --> select[Select two parents\n(tournament)]
-    select --> cross[Crossover with probability p_c\noffspring]
-    cross --> mutate[Mutate each gene\nwith probability p_m]
+    loop -- yes --> select[Select two parents<br/>(tournament)]
+    select --> cross["Crossover with probability p_c<br/>offspring"]
+    cross --> mutate["Mutate each gene<br/>with probability p_m"]
     mutate --> grow[Add offspring to new population]
     grow --> full{new population < pop_size?}
     full -- yes --> select
